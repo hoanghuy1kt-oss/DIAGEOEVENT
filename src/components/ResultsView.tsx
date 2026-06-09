@@ -251,16 +251,20 @@ export default function ResultsView() {
                 {leaderboard.map((team, index) => {
                   const pct = (team.votes / Math.max(1, team.members.length)) * 100;
                   
+                  // Calculate correct rank under ties
+                  const displayRank = leaderboard.filter(t => t.votes > team.votes).length + 1;
+                  const isTop1 = displayRank === 1 && team.votes > 0;
+                  
                   // Rank styling
                   const rankBg = 
-                    index === 0 ? 'bg-[#B28E43]' :
-                    index === 1 ? 'bg-[#A7B9CB]' :
-                    index === 2 ? 'bg-[#C65D07]' :
+                    displayRank === 1 ? 'bg-[#B28E43]' :
+                    displayRank === 2 ? 'bg-[#A7B9CB]' :
+                    displayRank === 3 ? 'bg-[#C65D07]' :
                     'bg-[#CBD5E1]';
 
                   const progressColor = 
-                    index === 0 ? 'bg-[#C65D07]' :
-                    index === 1 ? 'bg-[#859BB5]' :
+                    displayRank === 1 ? 'bg-[#C65D07]' :
+                    displayRank === 2 ? 'bg-[#859BB5]' :
                     'bg-[#E5D7BE]';
 
                   return (
@@ -272,7 +276,7 @@ export default function ResultsView() {
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                       className={`bg-white border transition-all duration-300 rounded-2xl p-5 flex items-center space-x-5 hover:border-[#BFA15F]/40 hover:shadow-md ${
-                        index === 0 ? 'border-[#BFA15F]/30 shadow-[0_8px_30px_rgba(160,120,38,0.04)]' : 'border-[#BFA15F]/15'
+                        isTop1 ? 'border-[#BFA15F]/30 shadow-[0_8px_30px_rgba(160,120,38,0.04)]' : 'border-[#BFA15F]/15'
                       }`}
                     >
                       {/* Rank Circle with floating Crown for Top 1 */}
@@ -281,9 +285,9 @@ export default function ResultsView() {
                           whileHover={{ scale: 1.1 }}
                           className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-black text-white flex-shrink-0 ${rankBg}`}
                         >
-                          {index + 1}
+                          {displayRank}
                         </motion.div>
-                        {index === 0 && team.votes > 0 && (
+                        {isTop1 && (
                           <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
                             <div className="animate-bob">
                               <img src="/crown.png" alt="Crown" className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.15)]" />

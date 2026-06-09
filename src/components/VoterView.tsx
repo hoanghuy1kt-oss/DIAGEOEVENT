@@ -638,15 +638,20 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                   {getResults().map((teamResult, index) => {
                     const percentage = (teamResult.votes / Math.max(1, teamResult.members.length)) * 100;
                     
+                    const resultsList = getResults();
+                    // Calculate correct rank under ties
+                    const displayRank = resultsList.filter(r => r.votes > teamResult.votes).length + 1;
+                    const isTop1 = displayRank === 1 && teamResult.votes > 0;
+
                     const rankBg = 
-                      index === 0 ? 'bg-[#B28E43]' :
-                      index === 1 ? 'bg-[#A7B9CB]' :
-                      index === 2 ? 'bg-[#C65D07]' :
+                      displayRank === 1 ? 'bg-[#B28E43]' :
+                      displayRank === 2 ? 'bg-[#A7B9CB]' :
+                      displayRank === 3 ? 'bg-[#C65D07]' :
                       'bg-[#CBD5E1]';
 
                     const progressColor = 
-                      index === 0 ? 'bg-[#C65D07]' :
-                      index === 1 ? 'bg-[#859BB5]' :
+                      displayRank === 1 ? 'bg-[#C65D07]' :
+                      displayRank === 2 ? 'bg-[#859BB5]' :
                       'bg-[#E5D7BE]';
 
                     return (
@@ -657,9 +662,9 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                       >
                         <div className="relative flex-shrink-0">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-black text-white flex-shrink-0 ${rankBg}`}>
-                            {index + 1}
+                            {displayRank}
                           </div>
-                          {index === 0 && teamResult.votes > 0 && (
+                          {isTop1 && (
                             <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
                               <div className="animate-bob">
                                 <img src="/crown.png" alt="Crown" className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.15)]" />
@@ -705,15 +710,20 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                   {getResults().map((teamResult, index) => {
                     const percentage = (teamResult.votes / Math.max(1, teamResult.members.length)) * 100;
 
+                    const resultsList = getResults();
+                    // Calculate correct rank under ties
+                    const displayRank = resultsList.filter(r => r.votes > teamResult.votes).length + 1;
+                    const isTop1 = displayRank === 1 && teamResult.votes > 0;
+
                     const rankBg = 
-                      index === 0 ? 'bg-[#B28E43]' :
-                      index === 1 ? 'bg-[#A7B9CB]' :
-                      index === 2 ? 'bg-[#C65D07]' :
+                      displayRank === 1 ? 'bg-[#B28E43]' :
+                      displayRank === 2 ? 'bg-[#A7B9CB]' :
+                      displayRank === 3 ? 'bg-[#C65D07]' :
                       'bg-[#CBD5E1]';
 
                     const progressColor = 
-                      index === 0 ? 'bg-[#C65D07]' :
-                      index === 1 ? 'bg-[#859BB5]' :
+                      displayRank === 1 ? 'bg-[#C65D07]' :
+                      displayRank === 2 ? 'bg-[#859BB5]' :
                       'bg-[#E5D7BE]';
 
                     return (
@@ -723,9 +733,9 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                       >
                         <div className="relative flex-shrink-0">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-black text-white flex-shrink-0 ${rankBg}`}>
-                            {index + 1}
+                            {displayRank}
                           </div>
-                          {index === 0 && teamResult.votes > 0 && (
+                          {isTop1 && (
                             <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
                               <div className="animate-bob">
                                 <img src="/crown.png" alt="Crown" className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.15)]" />

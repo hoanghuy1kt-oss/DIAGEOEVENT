@@ -15,6 +15,7 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [votedInCurrentSession, setVotedInCurrentSession] = useState(false);
   const [animateResults, setAnimateResults] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // References for intervals
   const countdownIntervalRef = useRef<any>(null);
@@ -236,9 +237,17 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
     });
   };
 
-  const handleVoteSubmit = () => {
-    if (selectedTeams.length === 0 || votedInCurrentSession || votingRemaining <= 0) return;
-    castVote(currentSession.id, user.id, selectedTeams);
+  const handleVoteSubmit = async () => {
+    if (selectedTeams.length === 0 || votedInCurrentSession || votingRemaining <= 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await castVote(currentSession.id, user.id, selectedTeams);
+    } catch (err: any) {
+      console.error("Failed to submit vote:", err);
+      alert("Failed to submit vote: " + (err.message || err));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const elapsedSeconds = currentSession.countdownStartedAt ? (Date.now() - currentSession.countdownStartedAt) / 1000 : 0;
@@ -611,10 +620,10 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
 
                   <button
                     onClick={handleVoteSubmit}
-                    disabled={selectedTeams.length === 0 || votingRemaining <= 0}
+                    disabled={selectedTeams.length === 0 || votingRemaining <= 0 || isSubmitting}
                     className="w-full py-4 sm:py-5 bg-gradient-to-r from-[#E0533C] via-[#A07826] to-[#BFA15F] disabled:opacity-50 text-white font-bold rounded-xl tracking-widest shadow-md hover:shadow-lg transition-all text-sm sm:text-base uppercase mt-4"
                   >
-                    {votingRemaining <= 0 ? 'VOTING TIME EXPIRED' : `CONFIRM VOTE (${selectedTeams.length} votes)`}
+                    {isSubmitting ? 'SUBMITTING...' : votingRemaining <= 0 ? 'VOTING TIME EXPIRED' : `CONFIRM VOTE (${selectedTeams.length} votes)`}
                   </button>
                 </div>
               )}

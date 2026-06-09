@@ -719,7 +719,7 @@ export async function castVote(sessionId: string, userId: string, teamIds: strin
   if (!useFirebase) {
     const dbState = getLocalStorageDB();
     const session = dbState.sessions.find(s => s.id === sessionId);
-    if (session && session.status === 'voting') {
+    if (session && (session.status === 'voting' || session.status === 'countdown')) {
       const limit = session.maxVotes || 1;
       const limitedVotes = teamIds.slice(0, limit);
       session.votes[userId] = limitedVotes;
@@ -728,13 +728,11 @@ export async function castVote(sessionId: string, userId: string, teamIds: strin
     return;
   }
 
-  const sessionRef = doc(db, 'sessions', sessionId);
-  const sessionSnap = await getDoc(sessionRef);
-  if (sessionSnap.exists() && sessionSnap.data().status === 'voting') {
-    const limit = sessionSnap.data().maxVotes || 1;
-    const limitedVotes = teamIds.slice(0, limit);
-    await setDoc(doc(db, 'sessions', sessionId, 'votes', userId), { teamIds: limitedVotes });
-  }
+  const dbState = getDB();
+  const session = dbState.sessions.find(s => s.id === sessionId);
+  const limit = session?.maxVotes || 1;
+  const limitedVotes = teamIds.slice(0, limit);
+  await setDoc(doc(db, 'sessions', sessionId, 'votes', userId), { teamIds: limitedVotes });
 }
 
 export async function resetDatabase() {

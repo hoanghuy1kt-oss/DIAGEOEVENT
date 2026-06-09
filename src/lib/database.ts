@@ -794,6 +794,47 @@ export async function resetVotingSessions() {
   await batch.commit();
 }
 
+export async function resetSessionVotes(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.votes = {};
+      session.status = 'waiting';
+      session.countdownStartedAt = null;
+      session.votingStartedAt = null;
+      if (dbState.currentSessionId === sessionId) {
+        dbState.currentSessionId = null;
+      }
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  // 1. Reset currentSessionId in global config if it was active
+  const dbState = getDB();
+  if (dbState.currentSessionId === sessionId) {
+    const globalRef = doc(db, 'config', 'global');
+    await setDoc(globalRef, { currentSessionId: null }, { merge: true });
+  }
+
+  // 2. Update session doc in firestore
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    status: 'waiting',
+    countdownStartedAt: null,
+    votingStartedAt: null
+  });
+
+  // 3. Delete all documents in votes subcollection
+  const votesSnap = await getDocs(collection(db, 'sessions', sessionId, 'votes'));
+  const batch = writeBatch(db);
+  votesSnap.forEach(vDoc => {
+    batch.delete(vDoc.ref);
+  });
+  await batch.commit();
+}
+
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 export function getYouTubeEmbedUrl(url: string | undefined): string | null {

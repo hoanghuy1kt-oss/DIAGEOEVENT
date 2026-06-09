@@ -19,6 +19,7 @@ import {
   formatDuration,
   resetDatabase,
   resetVotingSessions,
+  resetSessionVotes,
   Team, 
   VotingSession 
 } from '../lib/database';
@@ -380,17 +381,17 @@ export default function AdminPanel() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <button
+           <button
             onClick={handleResetVotingSessions}
             className="px-4 py-2 border border-[#A07826]/30 text-[#A07826] font-bold text-xs rounded-xl hover:bg-[#A07826]/5 tracking-wide transition-all"
           >
-            DELETE ALL SESSIONS
+            DELETE ALL SESSIONS (KEEPS TEAMS/MEMBERS)
           </button>
           <button
             onClick={handleResetAllData}
             className="px-4 py-2 border border-[#E0533C]/30 text-[#E0533C] font-bold text-xs rounded-xl hover:bg-[#E0533C]/5 tracking-wide transition-all"
           >
-            RESET DATABASE TO DEFAULT
+            RESET ALL SYSTEM DATA (SESSIONS & MEMBERS)
           </button>
           <button
             onClick={() => {
@@ -562,19 +563,13 @@ export default function AdminPanel() {
 
                                   {session.status === 'ended' && (
                                     <button
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (window.confirm(`Are you sure you want to reset the votes for session "${session.title}"?`)) {
-                                          const freshDb = getDB();
-                                          const s = freshDb.sessions.find(item => item.id === session.id);
-                                          if (s) {
-                                            s.votes = {};
-                                            s.status = 'waiting';
-                                            s.countdownStartedAt = null;
-                                            s.votingStartedAt = null;
-                                            if (freshDb.currentSessionId === session.id) {
-                                              freshDb.currentSessionId = null;
-                                            }
-                                            saveDB(freshDb);
+                                          try {
+                                            await resetSessionVotes(session.id);
+                                            alert('Votes reset successfully!');
+                                          } catch (err: any) {
+                                            alert('Failed to reset votes: ' + err.message);
                                           }
                                         }
                                       }}
@@ -763,20 +758,13 @@ export default function AdminPanel() {
                               </button>
 
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   if (window.confirm(`Are you sure you want to reset the votes for session "${session.title}"?`)) {
-                                    const freshDb = getDB();
-                                    const s = freshDb.sessions.find(item => item.id === session.id);
-                                    if (s) {
-                                      s.votes = {};
-                                      s.status = 'waiting';
-                                      s.countdownStartedAt = null;
-                                      s.votingStartedAt = null;
-                                      if (freshDb.currentSessionId === session.id) {
-                                        freshDb.currentSessionId = null;
-                                      }
-                                      saveDB(freshDb);
+                                    try {
+                                      await resetSessionVotes(session.id);
                                       alert('Votes reset successfully!');
+                                    } catch (err: any) {
+                                      alert('Failed to reset votes: ' + err.message);
                                     }
                                   }
                                 }}

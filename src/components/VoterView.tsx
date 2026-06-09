@@ -242,9 +242,10 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
   };
 
   const elapsedSeconds = currentSession.countdownStartedAt ? (Date.now() - currentSession.countdownStartedAt) / 1000 : 0;
-  const isCountdownActive = currentSession.status === 'countdown' && elapsedSeconds < 10;
-  const isVotingActive = currentSession.status === 'voting' || (currentSession.status === 'countdown' && elapsedSeconds >= 10);
-  const isWaiting = currentSession.status === 'waiting';
+  const isActive = currentSession.id === db.currentSessionId;
+  const isCountdownActive = isActive && currentSession.status === 'countdown' && elapsedSeconds < 10;
+  const isVotingActive = isActive && (currentSession.status === 'voting' || (currentSession.status === 'countdown' && elapsedSeconds >= 10));
+  const isWaiting = currentSession.status === 'waiting' || (!isActive && (currentSession.status === 'voting' || currentSession.status === 'countdown'));
   const isEnded = currentSession.status === 'ended';
 
   // Stagger animation configuration

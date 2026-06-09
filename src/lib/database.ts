@@ -207,9 +207,13 @@ function subscribeToActiveVotes(sessionId: string | null) {
         currentVotesCache[sessionId] = votes;
 
         // Apply votes to the session in cache
-        const session = localDBState.sessions.find(s => s.id === sessionId);
-        if (session) {
-          session.votes = votes;
+        const sessionIndex = localDBState.sessions.findIndex(s => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          localDBState.sessions = [
+            ...localDBState.sessions.slice(0, sessionIndex),
+            { ...localDBState.sessions[sessionIndex], votes },
+            ...localDBState.sessions.slice(sessionIndex + 1)
+          ];
           triggerListeners();
         }
       },

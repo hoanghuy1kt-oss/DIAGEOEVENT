@@ -283,7 +283,7 @@ export default function ResultsView() {
                         >
                           {index + 1}
                         </motion.div>
-                        {index === 0 && (
+                        {index === 0 && team.votes > 0 && (
                           <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
                             <div className="animate-bob">
                               <img src="/crown.png" alt="Crown" className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.15)]" />

@@ -92,11 +92,6 @@ const MOCK_TEAM_DETAILS: Record<string, { description: string; mediaUrl: string;
 
 function seedDB(): MockDB {
   const teams: Team[] = Object.entries(DEFAULT_TEAMS_DATA).map(([teamId, members]) => {
-    const details = MOCK_TEAM_DETAILS[teamId] || {
-      description: 'No detailed description available for this team\'s performance yet.',
-      mediaUrl: '',
-      mediaType: 'image'
-    };
     return {
       id: teamId,
       name: TEAM_NAMES[teamId] || `Team ${teamId.split('-')[1]}`,
@@ -104,9 +99,9 @@ function seedDB(): MockDB {
         id: `${teamId}-user-${index + 1}-${Math.random().toString(36).substring(2, 7)}`,
         name
       })),
-      description: details.description,
-      mediaUrl: details.mediaUrl,
-      mediaType: details.mediaType
+      description: '',
+      mediaUrl: '',
+      mediaType: 'image'
     };
   });
 
@@ -233,13 +228,7 @@ async function checkAndSeedFirestore() {
     const globalRef = doc(db, 'config', 'global');
     const globalSnap = await getDoc(globalRef);
     if (!globalSnap.exists()) {
-      // Seed default teams
       const teams: Team[] = Object.entries(DEFAULT_TEAMS_DATA).map(([teamId, members]) => {
-        const details = MOCK_TEAM_DETAILS[teamId] || {
-          description: 'No detailed description available.',
-          mediaUrl: '',
-          mediaType: 'image'
-        };
         return {
           id: teamId,
           name: TEAM_NAMES[teamId] || `Team ${teamId.split('-')[1]}`,
@@ -247,9 +236,9 @@ async function checkAndSeedFirestore() {
             id: `${teamId}-user-${index + 1}-${Math.random().toString(36).substring(2, 7)}`,
             name
           })),
-          description: details.description,
-          mediaUrl: details.mediaUrl,
-          mediaType: details.mediaType
+          description: '',
+          mediaUrl: '',
+          mediaType: 'image'
         };
       });
 
@@ -337,8 +326,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// ─── Core Exported Database Methods ──────────────────────────────────────────
-
 export function getDB(): MockDB {
   if (!useFirebase) {
     return getLocalStorageDB();
@@ -355,6 +342,13 @@ export function saveDB(dbState: MockDB) {
     teams: dbState.teams,
     currentSessionId: dbState.currentSessionId
   }, { merge: true }).catch(err => console.error('saveDB failed:', err));
+
+  // Save all sessions to Firestore so that teamDetails edits are saved
+  dbState.sessions.forEach((session) => {
+    const { votes, ...sessionData } = session;
+    setDoc(doc(db, 'sessions', session.id), sessionData, { merge: true })
+      .catch(err => console.error(`saveDB failed to write session ${session.id}:`, err));
+  });
 }
 
 export function subscribeToDB(callback: (db: MockDB) => void) {
@@ -528,13 +522,11 @@ export async function createSession(title: string, durationSeconds: number, maxV
   if (!useFirebase) {
     const dbState = getLocalStorageDB();
     dbState.sessions.push({ ...newSession, votes: {} });
-    dbState.currentSessionId = sessionId;
     saveLocalStorageDB(dbState);
     return sessionId;
   }
 
   await setDoc(doc(db, 'sessions', sessionId), newSession);
-  await setDoc(doc(db, 'config', 'global'), { currentSessionId: sessionId }, { merge: true });
   return sessionId;
 }
 

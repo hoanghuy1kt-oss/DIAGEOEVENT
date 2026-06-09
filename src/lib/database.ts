@@ -772,6 +772,28 @@ export async function resetDatabase() {
   await batch.commit();
 }
 
+export async function resetVotingSessions() {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    dbState.sessions = [];
+    dbState.currentSessionId = null;
+    saveLocalStorageDB(dbState);
+    return;
+  }
+
+  // 1. Reset currentSessionId in global config to null
+  const globalRef = doc(db, 'config', 'global');
+  await setDoc(globalRef, { currentSessionId: null }, { merge: true });
+
+  // 2. Delete all sessions in firestore
+  const sessionsSnap = await getDocs(collection(db, 'sessions'));
+  const batch = writeBatch(db);
+  sessionsSnap.forEach(sDoc => {
+    batch.delete(sDoc.ref);
+  });
+  await batch.commit();
+}
+
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 export function getYouTubeEmbedUrl(url: string | undefined): string | null {

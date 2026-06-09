@@ -18,6 +18,7 @@ import {
   getYouTubeEmbedUrl,
   formatDuration,
   resetDatabase,
+  resetVotingSessions,
   Team, 
   VotingSession 
 } from '../lib/database';
@@ -279,9 +280,25 @@ export default function AdminPanel() {
 
   const handleResetAllData = async () => {
     if (window.confirm('THIS ACTION WILL RESET THE ENTIRE DATABASE TO DEFAULT (Deletes all sessions, restores original teams). Do you want to continue?')) {
-      await resetDatabase();
-      localStorage.removeItem('spg_voting_db');
-      window.location.reload();
+      try {
+        await resetDatabase();
+        localStorage.removeItem('spg_voting_db');
+        window.location.reload();
+      } catch (err: any) {
+        alert('Failed to reset database: ' + err.message);
+      }
+    }
+  };
+
+  const handleResetVotingSessions = async () => {
+    if (window.confirm('Are you sure you want to delete all voting sessions? This will keep all teams and members intact.')) {
+      try {
+        await resetVotingSessions();
+        localStorage.removeItem('spg_voting_db');
+        window.location.reload();
+      } catch (err: any) {
+        alert('Failed to reset sessions: ' + err.message);
+      }
     }
   };
 
@@ -363,6 +380,12 @@ export default function AdminPanel() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={handleResetVotingSessions}
+            className="px-4 py-2 border border-[#A07826]/30 text-[#A07826] font-bold text-xs rounded-xl hover:bg-[#A07826]/5 tracking-wide transition-all"
+          >
+            DELETE ALL SESSIONS
+          </button>
           <button
             onClick={handleResetAllData}
             className="px-4 py-2 border border-[#E0533C]/30 text-[#E0533C] font-bold text-xs rounded-xl hover:bg-[#E0533C]/5 tracking-wide transition-all"

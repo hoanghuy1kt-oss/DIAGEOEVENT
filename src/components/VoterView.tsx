@@ -491,6 +491,9 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                       const mediaType = details?.mediaType !== undefined ? details.mediaType : t.mediaType;
                       const description = details?.description !== undefined ? details.description : t.description;
 
+                      const hasMedia = !!(mediaUrl && typeof mediaUrl === 'string' && mediaUrl.trim());
+                      const hasDescription = !!(description && typeof description === 'string' && description.trim());
+
                       return (
                         <div
                           key={t.id}
@@ -509,7 +512,7 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                           `}
                         >
                           {/* Media Header (only rendered if mediaUrl exists) */}
-                          {mediaUrl ? (
+                          {hasMedia ? (
                             <div className="aspect-video w-full bg-[#F4EFE6] relative overflow-hidden border-b border-[#BFA15F]/10">
                               {mediaType === 'video' ? (() => {
                                 const embedUrl = getYouTubeEmbedUrl(mediaUrl);
@@ -567,7 +570,7 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                                   )}
                                   
                                   {/* Inline checkbox when there is no media layout */}
-                                  {!mediaUrl && !isOwnTeam && (
+                                  {!hasMedia && !isOwnTeam && (
                                     <div
                                       className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
                                         isSelected
@@ -582,7 +585,7 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                                   )}
                                 </div>
                               </div>
-                              {description && (
+                              {hasDescription && (
                                 <p className="text-xs sm:text-sm text-[#241C15]/70 font-semibold mt-2 line-clamp-3 leading-relaxed">
                                   {description}
                                 </p>

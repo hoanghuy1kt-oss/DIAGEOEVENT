@@ -326,20 +326,8 @@ async function checkAndSeedFirestore() {
 
       await setDoc(globalRef, {
         teams,
-        currentSessionId: 'session-1'
+        currentSessionId: null
       });
-
-      // Seed default session (omit votes from main document)
-      const initialSession: Omit<VotingSession, 'votes'> = {
-        id: 'session-1',
-        title: 'Best Performance Voting',
-        status: 'waiting',
-        countdownStartedAt: null,
-        votingStartedAt: null,
-        duration: 300,
-        maxVotes: 1
-      };
-      await setDoc(doc(db, 'sessions', 'session-1'), initialSession);
     } else {
       // Run migrations for existing data to clear mock details
       await migrateExistingFirestoreData();
@@ -772,7 +760,7 @@ export async function resetDatabase() {
   });
   await setDoc(globalRef, {
     teams: defaultTeams,
-    currentSessionId: 'session-1'
+    currentSessionId: null
   });
 
   // 2. Delete all existing sessions in a write batch
@@ -782,18 +770,6 @@ export async function resetDatabase() {
     batch.delete(sDoc.ref);
   });
   await batch.commit();
-
-  // 3. Create initial clean session-1
-  const initialSession: Omit<VotingSession, 'votes'> = {
-    id: 'session-1',
-    title: 'Best Performance Voting',
-    status: 'waiting',
-    countdownStartedAt: null,
-    votingStartedAt: null,
-    duration: 300,
-    maxVotes: 1
-  };
-  await setDoc(doc(db, 'sessions', 'session-1'), initialSession);
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────

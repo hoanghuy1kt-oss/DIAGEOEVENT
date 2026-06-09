@@ -507,10 +507,10 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                             }
                           `}
                         >
-                          {/* Media Header */}
-                          <div className="aspect-video w-full bg-[#F4EFE6] relative overflow-hidden border-b border-[#BFA15F]/10">
-                            {mediaUrl ? (
-                              mediaType === 'video' ? (() => {
+                          {/* Media Header (only rendered if mediaUrl exists) */}
+                          {mediaUrl ? (
+                            <div className="aspect-video w-full bg-[#F4EFE6] relative overflow-hidden border-b border-[#BFA15F]/10">
+                              {mediaType === 'video' ? (() => {
                                 const embedUrl = getYouTubeEmbedUrl(mediaUrl);
                                 return embedUrl ? (
                                   <iframe
@@ -532,44 +532,54 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                                   alt={t.name} 
                                   className="w-full h-full object-cover transition-transform duration-500 hover:scale-105" 
                                 />
-                              )
-                            ) : (
-                              <div className="absolute inset-0 bg-gradient-to-br from-[#E0533C]/10 via-[#A07826]/5 to-[#BFA15F]/10 flex flex-col items-center justify-center text-[#A07826]/40">
-                                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                </svg>
-                                <span className="text-[10px] font-bold uppercase tracking-wider mt-2">Team Performance</span>
-                              </div>
-                            )}
+                              )}
 
-                            {/* Floating checkbox */}
-                            {!isOwnTeam && (
-                              <div className="absolute top-3 right-3 z-10">
-                                <div
-                                  className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
-                                    isSelected
-                                      ? 'bg-[#A07826] border-[#A07826] text-white shadow-md scale-105'
-                                      : 'bg-white/80 backdrop-blur-sm border-[#BFA15F]/40 text-transparent shadow-sm'
-                                  }`}
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
-                                  </svg>
+                              {/* Floating checkbox */}
+                              {!isOwnTeam && (
+                                <div className="absolute top-3 right-3 z-10">
+                                  <div
+                                    className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
+                                      isSelected
+                                        ? 'bg-[#A07826] border-[#A07826] text-white shadow-md scale-105'
+                                        : 'bg-white/80 backdrop-blur-sm border-[#BFA15F]/40 text-transparent shadow-sm'
+                                    }`}
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                          ) : null}
 
                           {/* Content Body */}
                           <div className="p-5 flex-grow flex flex-col justify-between space-y-4">
                             <div>
                               <div className="flex items-center justify-between">
                                 <h4 className="font-bold text-lg text-[#241C15]">{t.name}</h4>
-                                {isOwnTeam && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider text-[#E0533C] bg-[#E0533C]/10 border border-[#E0533C]/20 px-2 py-0.5 rounded-full">
-                                    Your Team
-                                  </span>
-                                )}
+                                <div className="flex items-center space-x-2">
+                                  {isOwnTeam && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-[#E0533C] bg-[#E0533C]/10 border border-[#E0533C]/20 px-2 py-0.5 rounded-full">
+                                      Your Team
+                                    </span>
+                                  )}
+                                  
+                                  {/* Inline checkbox when there is no media layout */}
+                                  {!mediaUrl && !isOwnTeam && (
+                                    <div
+                                      className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all ${
+                                        isSelected
+                                          ? 'bg-[#A07826] border-[#A07826] text-white shadow-md scale-105'
+                                          : 'bg-[#F4EFE6] border-[#BFA15F]/40 text-transparent shadow-sm'
+                                      }`}
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               {description && (
                                 <p className="text-xs sm:text-sm text-[#241C15]/70 font-semibold mt-2 line-clamp-3 leading-relaxed">

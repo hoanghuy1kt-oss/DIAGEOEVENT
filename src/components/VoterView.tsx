@@ -571,9 +571,11 @@ export default function VoterView({ user, onLogout }: VoterViewProps) {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs sm:text-sm text-[#241C15]/70 font-semibold mt-2 line-clamp-3 leading-relaxed">
-                                {description || 'No detailed description available for this team\'s performance yet.'}
-                              </p>
+                              {description && (
+                                <p className="text-xs sm:text-sm text-[#241C15]/70 font-semibold mt-2 line-clamp-3 leading-relaxed">
+                                  {description}
+                                </p>
+                              )}
                             </div>
 
                             <div className="pt-2 border-t border-[#F4EFE6] flex items-center justify-between text-xs font-bold">

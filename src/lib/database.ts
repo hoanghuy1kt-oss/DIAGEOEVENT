@@ -64,28 +64,28 @@ const TEAM_NAMES: Record<string, string> = {
 
 const MOCK_TEAM_DETAILS: Record<string, { description: string; mediaUrl: string; mediaType: 'image' | 'video' }> = {
   'team-1': {
-    description: 'Dynamic Mashup song & dance performance "Allumer le feu", featuring exclusive fiery choreography.',
-    mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop',
+    description: '',
+    mediaUrl: '',
     mediaType: 'image'
   },
   'team-2': {
-    description: 'Witty comedy play "Welcome to Hoi An" bringing laughter and messages of unity.',
-    mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop',
+    description: '',
+    mediaUrl: '',
     mediaType: 'image'
   },
   'team-3': {
-    description: 'Graceful contemporary folk dance "Vietnamese Lotus Soul", honoring traditional Vietnamese beauty.',
-    mediaUrl: 'https://images.unsplash.com/photo-1460889418203-53b5b635f129?w=600&auto=format&fit=crop',
+    description: '',
+    mediaUrl: '',
     mediaType: 'image'
   },
   'team-4': {
-    description: 'Modern dance and collective Flashmob "Team Power", unleashing young and vibrant energy.',
-    mediaUrl: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=600&auto=format&fit=crop',
+    description: '',
+    mediaUrl: '',
     mediaType: 'image'
   },
   'team-5': {
-    description: 'Creative recycled fashion show "For a Green Planet", unique, innovative, and captivating.',
-    mediaUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop',
+    description: '',
+    mediaUrl: '',
     mediaType: 'image'
   }
 };

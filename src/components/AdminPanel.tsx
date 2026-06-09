@@ -17,6 +17,7 @@ import {
   updateTeamName,
   getYouTubeEmbedUrl,
   formatDuration,
+  resetDatabase,
   Team, 
   VotingSession 
 } from '../lib/database';
@@ -273,8 +274,9 @@ export default function AdminPanel() {
 
 
 
-  const handleResetAllData = () => {
+  const handleResetAllData = async () => {
     if (window.confirm('THIS ACTION WILL RESET THE ENTIRE DATABASE TO DEFAULT (Deletes all sessions, restores original teams). Do you want to continue?')) {
+      await resetDatabase();
       localStorage.removeItem('spg_voting_db');
       window.location.reload();
     }

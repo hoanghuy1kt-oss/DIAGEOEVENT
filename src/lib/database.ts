@@ -1,0 +1,720 @@
+import { db } from './firebase';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  collection, 
+  getDocs, 
+  writeBatch, 
+  updateDoc 
+} from 'firebase/firestore';
+
+export interface Member {
+  id: string;
+  name: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  members: Member[];
+  description?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
+}
+
+export interface VotingSession {
+  id: string;
+  title: string;
+  status: 'waiting' | 'countdown' | 'voting' | 'ended';
+  countdownStartedAt: number | null; // Unix timestamp
+  votingStartedAt: number | null;    // Unix timestamp
+  duration: number;                  // seconds
+  votes: Record<string, string[]>;   // voterId -> array of teamIds voted for
+  teamDetails?: Record<string, { description: string; mediaUrl?: string; mediaType?: 'image' | 'video' }>;
+  maxVotes: number;                  // max votes per voter
+}
+
+export interface MockDB {
+  teams: Team[];
+  sessions: VotingSession[];
+  currentSessionId: string | null;
+}
+
+const MOCK_STORAGE_KEY = 'spg_voting_db';
+
+// Default mock data to seed
+const DEFAULT_TEAMS_DATA: Record<string, string[]> = {
+  'team-1': ['Jay', 'Hai', 'Juliana', 'John', 'Tu Van', 'Ray', 'Phuong', 'Lhen', 'Carmen', 'Antoine', 'Shirlene'],
+  'team-2': ['Rose Ann', 'Bryna', 'Siew', 'Son', 'Catherine', 'Alex', 'Tuan Anh', 'Marcus', 'Cuong', 'Utpal'],
+  'team-3': ['Martin', 'Phil', 'Si Hao', 'Jacquelin', 'Trang', 'Tuyen', 'Anoop', 'Thao', 'Tho'],
+  'team-4': ['Jess', 'Poly', 'Aubrey', 'Cherry', 'Samantha', 'Terence', 'Brenda', 'Sara', 'Duong'],
+  'team-5': ['Claudia', 'Kent', 'Nicole', 'Tiffany', 'Madhan', 'Loi', 'Cheryl', 'Sophia']
+};
+
+const TEAM_NAMES: Record<string, string> = {
+  'team-1': 'Team 1',
+  'team-2': 'Team 2',
+  'team-3': 'Team 3',
+  'team-4': 'Team 4',
+  'team-5': 'Team 5'
+};
+
+const MOCK_TEAM_DETAILS: Record<string, { description: string; mediaUrl: string; mediaType: 'image' | 'video' }> = {
+  'team-1': {
+    description: 'Dynamic Mashup song & dance performance "Allumer le feu", featuring exclusive fiery choreography.',
+    mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop',
+    mediaType: 'image'
+  },
+  'team-2': {
+    description: 'Witty comedy play "Welcome to Hoi An" bringing laughter and messages of unity.',
+    mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop',
+    mediaType: 'image'
+  },
+  'team-3': {
+    description: 'Graceful contemporary folk dance "Vietnamese Lotus Soul", honoring traditional Vietnamese beauty.',
+    mediaUrl: 'https://images.unsplash.com/photo-1460889418203-53b5b635f129?w=600&auto=format&fit=crop',
+    mediaType: 'image'
+  },
+  'team-4': {
+    description: 'Modern dance and collective Flashmob "Team Power", unleashing young and vibrant energy.',
+    mediaUrl: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=600&auto=format&fit=crop',
+    mediaType: 'image'
+  },
+  'team-5': {
+    description: 'Creative recycled fashion show "For a Green Planet", unique, innovative, and captivating.',
+    mediaUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop',
+    mediaType: 'image'
+  }
+};
+
+function seedDB(): MockDB {
+  const teams: Team[] = Object.entries(DEFAULT_TEAMS_DATA).map(([teamId, members]) => {
+    const details = MOCK_TEAM_DETAILS[teamId] || {
+      description: 'No detailed description available for this team\'s performance yet.',
+      mediaUrl: '',
+      mediaType: 'image'
+    };
+    return {
+      id: teamId,
+      name: TEAM_NAMES[teamId] || `Team ${teamId.split('-')[1]}`,
+      members: members.map((name, index) => ({
+        id: `${teamId}-user-${index + 1}-${Math.random().toString(36).substring(2, 7)}`,
+        name
+      })),
+      description: details.description,
+      mediaUrl: details.mediaUrl,
+      mediaType: details.mediaType
+    };
+  });
+
+  const initialSession: VotingSession = {
+    id: 'session-1',
+    title: 'Best Performance Voting',
+    status: 'waiting',
+    countdownStartedAt: null,
+    votingStartedAt: null,
+    duration: 300,
+    votes: {},
+    maxVotes: 1
+  };
+
+  const db: MockDB = {
+    teams,
+    sessions: [initialSession],
+    currentSessionId: null
+  };
+
+  localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(db));
+  return db;
+}
+
+// Global cached state populated from Firestore (or LocalStorage)
+let localDBState: MockDB = {
+  teams: [],
+  sessions: [],
+  currentSessionId: null
+};
+
+// Flags and settings
+let useFirebase = true;
+const dbListeners = new Set<(db: MockDB) => void>();
+const currentVotesCache: Record<string, Record<string, string[]>> = {};
+
+// Helper to notify listeners
+function triggerListeners() {
+  dbListeners.forEach(listener => listener({ ...localDBState }));
+}
+
+// Local Storage Fallback Implementation
+function getLocalStorageDB(): MockDB {
+  if (typeof window === 'undefined') {
+    return { teams: [], sessions: [], currentSessionId: null };
+  }
+  const data = localStorage.getItem(MOCK_STORAGE_KEY);
+  if (!data) {
+    return seedDB();
+  }
+  try {
+    const parsed = JSON.parse(data) as MockDB;
+    // self healing migrations
+    let needsUpdate = false;
+    parsed.teams.forEach(t => {
+      const details = MOCK_TEAM_DETAILS[t.id];
+      if (details) {
+        if (t.description === undefined) { t.description = details.description; needsUpdate = true; }
+        if (t.mediaUrl === undefined) { t.mediaUrl = details.mediaUrl; needsUpdate = true; }
+        if (t.mediaType === undefined) { t.mediaType = details.mediaType; needsUpdate = true; }
+      }
+    });
+    parsed.sessions.forEach(s => {
+      if (s.maxVotes === undefined) {
+        s.maxVotes = 1;
+        needsUpdate = true;
+      }
+    });
+    if (needsUpdate) {
+      localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
+  } catch (e) {
+    return seedDB();
+  }
+}
+
+function saveLocalStorageDB(db: MockDB) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(db));
+    window.dispatchEvent(new Event('storage'));
+  }
+}
+
+// Global initialization of real-time subscriptions
+let activeVotesUnsubscribe: (() => void) | null = null;
+
+function subscribeToActiveVotes(sessionId: string | null) {
+  if (activeVotesUnsubscribe) {
+    activeVotesUnsubscribe();
+    activeVotesUnsubscribe = null;
+  }
+  if (!sessionId || !useFirebase) return;
+
+  try {
+    activeVotesUnsubscribe = onSnapshot(
+      collection(db, 'sessions', sessionId, 'votes'),
+      (snapshot) => {
+        const votes: Record<string, string[]> = {};
+        snapshot.forEach(vDoc => {
+          votes[vDoc.id] = vDoc.data().teamIds || [];
+        });
+        currentVotesCache[sessionId] = votes;
+
+        // Apply votes to the session in cache
+        const session = localDBState.sessions.find(s => s.id === sessionId);
+        if (session) {
+          session.votes = votes;
+          triggerListeners();
+        }
+      },
+      (err) => {
+        console.error('Error listening to votes:', err);
+      }
+    );
+  } catch (e) {
+    console.error('Failed to setup votes snapshot:', e);
+  }
+}
+
+// Seeding logic for Firestore
+async function checkAndSeedFirestore() {
+  try {
+    const globalRef = doc(db, 'config', 'global');
+    const globalSnap = await getDoc(globalRef);
+    if (!globalSnap.exists()) {
+      // Seed default teams
+      const teams: Team[] = Object.entries(DEFAULT_TEAMS_DATA).map(([teamId, members]) => {
+        const details = MOCK_TEAM_DETAILS[teamId] || {
+          description: 'No detailed description available.',
+          mediaUrl: '',
+          mediaType: 'image'
+        };
+        return {
+          id: teamId,
+          name: TEAM_NAMES[teamId] || `Team ${teamId.split('-')[1]}`,
+          members: members.map((name, index) => ({
+            id: `${teamId}-user-${index + 1}-${Math.random().toString(36).substring(2, 7)}`,
+            name
+          })),
+          description: details.description,
+          mediaUrl: details.mediaUrl,
+          mediaType: details.mediaType
+        };
+      });
+
+      await setDoc(globalRef, {
+        teams,
+        currentSessionId: 'session-1'
+      });
+
+      // Seed default session (omit votes from main document)
+      const initialSession: Omit<VotingSession, 'votes'> = {
+        id: 'session-1',
+        title: 'Best Performance Voting',
+        status: 'waiting',
+        countdownStartedAt: null,
+        votingStartedAt: null,
+        duration: 300,
+        maxVotes: 1
+      };
+      await setDoc(doc(db, 'sessions', 'session-1'), initialSession);
+    }
+  } catch (e) {
+    console.error('Firestore seeding failed, falling back to local mode:', e);
+    useFirebase = false;
+  }
+}
+
+// Start listeners if on client side
+if (typeof window !== 'undefined') {
+  // Check and seed Firestore first
+  checkAndSeedFirestore().then(() => {
+    if (!useFirebase) {
+      // Fallback local storage event listener
+      window.addEventListener('storage', () => {
+        localDBState = getLocalStorageDB();
+        triggerListeners();
+      });
+      localDBState = getLocalStorageDB();
+      triggerListeners();
+      return;
+    }
+
+    // Subscribe to global configurations
+    onSnapshot(doc(db, 'config', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        localDBState.teams = data.teams || [];
+        const nextSessionId = data.currentSessionId || null;
+        if (nextSessionId !== localDBState.currentSessionId) {
+          localDBState.currentSessionId = nextSessionId;
+          subscribeToActiveVotes(nextSessionId);
+        }
+        triggerListeners();
+      }
+    }, (err) => {
+      console.warn('Firestore global sync failed, switching to local storage:', err);
+      useFirebase = false;
+      localDBState = getLocalStorageDB();
+      triggerListeners();
+    });
+
+    // Subscribe to sessions collection
+    onSnapshot(collection(db, 'sessions'), (snapshot) => {
+      const sessions: VotingSession[] = [];
+      snapshot.forEach(sDoc => {
+        const data = sDoc.data() as Omit<VotingSession, 'votes'>;
+        const sessionId = sDoc.id;
+        sessions.push({
+          ...data,
+          id: sessionId,
+          votes: currentVotesCache[sessionId] || {}
+        });
+      });
+      localDBState.sessions = sessions;
+      // Re-link votes for active session if it loaded after sessions
+      if (localDBState.currentSessionId) {
+        const activeS = localDBState.sessions.find(s => s.id === localDBState.currentSessionId);
+        if (activeS && currentVotesCache[localDBState.currentSessionId]) {
+          activeS.votes = currentVotesCache[localDBState.currentSessionId];
+        }
+      }
+      triggerListeners();
+    }, (err) => {
+      console.error('Firestore sessions sync failed:', err);
+    });
+  });
+}
+
+// ─── Core Exported Database Methods ──────────────────────────────────────────
+
+export function getDB(): MockDB {
+  if (!useFirebase) {
+    return getLocalStorageDB();
+  }
+  return localDBState;
+}
+
+export function saveDB(dbState: MockDB) {
+  if (!useFirebase) {
+    saveLocalStorageDB(dbState);
+    return;
+  }
+  setDoc(doc(db, 'config', 'global'), {
+    teams: dbState.teams,
+    currentSessionId: dbState.currentSessionId
+  }, { merge: true }).catch(err => console.error('saveDB failed:', err));
+}
+
+export function subscribeToDB(callback: (db: MockDB) => void) {
+  dbListeners.add(callback);
+  callback(getDB());
+  return () => {
+    dbListeners.delete(callback);
+  };
+}
+
+// ─── Team & Member Actions ───────────────────────────────────────────────────
+
+export async function updateTeamName(teamId: string, newName: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const team = dbState.teams.find(t => t.id === teamId);
+    if (team) {
+      team.name = newName;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+  const dbState = getDB();
+  const updatedTeams = dbState.teams.map(t => t.id === teamId ? { ...t, name: newName } : t);
+  await setDoc(doc(db, 'config', 'global'), { teams: updatedTeams }, { merge: true });
+}
+
+export async function setTeamCount(count: number) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const currentCount = dbState.teams.length;
+    if (count === currentCount) return;
+
+    if (count < currentCount) {
+      dbState.teams = dbState.teams.slice(0, count);
+    } else {
+      for (let i = currentCount; i < count; i++) {
+        const teamId = `team-${i + 1}`;
+        dbState.teams.push({
+          id: teamId,
+          name: `Team ${i + 1}`,
+          members: []
+        });
+      }
+    }
+    saveLocalStorageDB(dbState);
+    return;
+  }
+
+  const dbState = getDB();
+  const currentCount = dbState.teams.length;
+  if (count === currentCount) return;
+
+  let newTeams = [...dbState.teams];
+  if (count < currentCount) {
+    newTeams = newTeams.slice(0, count);
+  } else {
+    for (let i = currentCount; i < count; i++) {
+      const teamId = `team-${i + 1}`;
+      newTeams.push({
+        id: teamId,
+        name: `Team ${i + 1}`,
+        members: []
+      });
+    }
+  }
+  await setDoc(doc(db, 'config', 'global'), { teams: newTeams }, { merge: true });
+}
+
+export async function addMember(teamId: string, name: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const team = dbState.teams.find(t => t.id === teamId);
+    if (team) {
+      const newId = `${teamId}-user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      team.members.push({ id: newId, name });
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  const dbState = getDB();
+  const newTeams = dbState.teams.map(t => {
+    if (t.id === teamId) {
+      const newId = `${teamId}-user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      return {
+        ...t,
+        members: [...t.members, { id: newId, name }]
+      };
+    }
+    return t;
+  });
+  await setDoc(doc(db, 'config', 'global'), { teams: newTeams }, { merge: true });
+}
+
+export async function deleteMember(teamId: string, memberId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const team = dbState.teams.find(t => t.id === teamId);
+    if (team) {
+      team.members = team.members.filter(m => m.id !== memberId);
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  const dbState = getDB();
+  const newTeams = dbState.teams.map(t => {
+    if (t.id === teamId) {
+      return {
+        ...t,
+        members: t.members.filter(m => m.id !== memberId)
+      };
+    }
+    return t;
+  });
+  await setDoc(doc(db, 'config', 'global'), { teams: newTeams }, { merge: true });
+}
+
+export async function swapMember(memberId: string, fromTeamId: string, toTeamId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const sourceTeam = dbState.teams.find(t => t.id === fromTeamId);
+    const destTeam = dbState.teams.find(t => t.id === toTeamId);
+
+    if (sourceTeam && destTeam) {
+      const memberIndex = sourceTeam.members.findIndex(m => m.id === memberId);
+      if (memberIndex !== -1) {
+        const [member] = sourceTeam.members.splice(memberIndex, 1);
+        destTeam.members.push(member);
+        saveLocalStorageDB(dbState);
+      }
+    }
+    return;
+  }
+
+  const dbState = getDB();
+  const sourceTeam = dbState.teams.find(t => t.id === fromTeamId);
+  const destTeam = dbState.teams.find(t => t.id === toTeamId);
+  if (sourceTeam && destTeam) {
+    const member = sourceTeam.members.find(m => m.id === memberId);
+    if (member) {
+      const newTeams = dbState.teams.map(t => {
+        if (t.id === fromTeamId) {
+          return { ...t, members: t.members.filter(m => m.id !== memberId) };
+        }
+        if (t.id === toTeamId) {
+          return { ...t, members: [...t.members, member] };
+        }
+        return t;
+      });
+      await setDoc(doc(db, 'config', 'global'), { teams: newTeams }, { merge: true });
+    }
+  }
+}
+
+// ─── Session & Voting Actions ─────────────────────────────────────────────────
+
+export async function createSession(title: string, durationSeconds: number, maxVotes: number = 1) {
+  const sessionId = `session-${Date.now()}`;
+  const newSession: Omit<VotingSession, 'votes'> = {
+    id: sessionId,
+    title,
+    status: 'waiting',
+    countdownStartedAt: null,
+    votingStartedAt: null,
+    duration: durationSeconds,
+    maxVotes
+  };
+
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    dbState.sessions.push({ ...newSession, votes: {} });
+    dbState.currentSessionId = sessionId;
+    saveLocalStorageDB(dbState);
+    return sessionId;
+  }
+
+  await setDoc(doc(db, 'sessions', sessionId), newSession);
+  await setDoc(doc(db, 'config', 'global'), { currentSessionId: sessionId }, { merge: true });
+  return sessionId;
+}
+
+export async function triggerCountdown(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.status = 'countdown';
+      session.countdownStartedAt = Date.now();
+      session.votingStartedAt = null;
+      dbState.currentSessionId = sessionId;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    status: 'countdown',
+    countdownStartedAt: Date.now(),
+    votingStartedAt: null
+  });
+  await setDoc(doc(db, 'config', 'global'), { currentSessionId: sessionId }, { merge: true });
+}
+
+export async function startVoting(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.status = 'voting';
+      session.votingStartedAt = Date.now();
+      dbState.currentSessionId = sessionId;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    status: 'voting',
+    votingStartedAt: Date.now()
+  });
+  await setDoc(doc(db, 'config', 'global'), { currentSessionId: sessionId }, { merge: true });
+}
+
+export async function forceStopSession(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.status = 'ended';
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    status: 'ended'
+  });
+}
+
+export async function switchSession(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    if (dbState.sessions.some(s => s.id === sessionId)) {
+      dbState.currentSessionId = sessionId;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  await setDoc(doc(db, 'config', 'global'), { currentSessionId: sessionId }, { merge: true });
+}
+
+export async function deleteSession(sessionId: string) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    dbState.sessions = dbState.sessions.filter(s => s.id !== sessionId);
+    if (dbState.currentSessionId === sessionId) {
+      dbState.currentSessionId = dbState.sessions.length > 0 ? dbState.sessions[0].id : null;
+    }
+    saveLocalStorageDB(dbState);
+    return;
+  }
+
+  await deleteDoc(doc(db, 'sessions', sessionId));
+  const dbState = getDB();
+  if (dbState.currentSessionId === sessionId) {
+    const remaining = dbState.sessions.filter(s => s.id !== sessionId);
+    const nextId = remaining.length > 0 ? remaining[0].id : null;
+    await setDoc(doc(db, 'config', 'global'), { currentSessionId: nextId }, { merge: true });
+  }
+}
+
+export async function updateSessionInfo(sessionId: string, title: string, duration: number, maxVotes: number) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session) {
+      session.title = title;
+      session.duration = duration;
+      session.maxVotes = maxVotes;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    title,
+    duration,
+    maxVotes
+  });
+}
+
+export async function castVote(sessionId: string, userId: string, teamIds: string[]) {
+  if (!useFirebase) {
+    const dbState = getLocalStorageDB();
+    const session = dbState.sessions.find(s => s.id === sessionId);
+    if (session && session.status === 'voting') {
+      const limit = session.maxVotes || 1;
+      const limitedVotes = teamIds.slice(0, limit);
+      session.votes[userId] = limitedVotes;
+      saveLocalStorageDB(dbState);
+    }
+    return;
+  }
+
+  const sessionRef = doc(db, 'sessions', sessionId);
+  const sessionSnap = await getDoc(sessionRef);
+  if (sessionSnap.exists() && sessionSnap.data().status === 'voting') {
+    const limit = sessionSnap.data().maxVotes || 1;
+    const limitedVotes = teamIds.slice(0, limit);
+    await setDoc(doc(db, 'sessions', sessionId, 'votes', userId), { teamIds: limitedVotes });
+  }
+}
+
+export async function resetDatabase() {
+  if (!useFirebase) {
+    seedDB();
+    return;
+  }
+
+  try {
+    const globalRef = doc(db, 'config', 'global');
+    await deleteDoc(globalRef);
+
+    const sessionsSnap = await getDocs(collection(db, 'sessions'));
+    const batch = writeBatch(db);
+    sessionsSnap.forEach(sDoc => {
+      batch.delete(sDoc.ref);
+    });
+    await batch.commit();
+
+    await checkAndSeedFirestore();
+  } catch (e) {
+    console.error('Failed to reset Firestore DB:', e);
+  }
+}
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+export function getYouTubeEmbedUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  if (match && match[2].length === 11) {
+    return `https://www.youtube.com/embed/${match[2]}`;
+  }
+  return null;
+}
+
+export function formatDuration(totalSeconds: number): string {
+  const rounded = Math.ceil(totalSeconds);
+  if (rounded <= 0) return '00:00';
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const seconds = rounded % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}

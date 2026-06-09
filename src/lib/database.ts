@@ -222,6 +222,88 @@ function subscribeToActiveVotes(sessionId: string | null) {
   }
 }
 
+async function migrateExistingFirestoreData() {
+  try {
+    const globalRef = doc(db, 'config', 'global');
+    const globalSnap = await getDoc(globalRef);
+    if (globalSnap.exists()) {
+      const data = globalSnap.data();
+      const teams = data.teams || [];
+      let updated = false;
+      const updatedTeams = teams.map((t: any) => {
+        if (
+          t.description?.includes('Allumer le feu') ||
+          t.description?.includes('Welcome to Hoi An') ||
+          t.description?.includes('Vietnamese Lotus Soul') ||
+          t.description?.includes('Team Power') ||
+          t.description?.includes('Green Planet') ||
+          t.mediaUrl?.includes('unsplash.com')
+        ) {
+          updated = true;
+          return {
+            ...t,
+            description: '',
+            mediaUrl: '',
+            mediaType: 'image'
+          };
+        }
+        return t;
+      });
+
+      if (updated) {
+        await setDoc(globalRef, { teams: updatedTeams }, { merge: true });
+        console.log('Successfully migrated global teams to clear mock details.');
+      }
+    }
+  } catch (e) {
+    console.error('Migration of global teams failed:', e);
+  }
+}
+
+async function migrateExistingSessions() {
+  try {
+    const sessionsSnap = await getDocs(collection(db, 'sessions'));
+    const batch = writeBatch(db);
+    let updatedAny = false;
+    sessionsSnap.forEach(sDoc => {
+      const data = sDoc.data();
+      if (data.teamDetails) {
+        let sessionUpdated = false;
+        const updatedTeamDetails = { ...data.teamDetails };
+        Object.entries(updatedTeamDetails).forEach(([teamId, details]: [string, any]) => {
+          if (
+            details.description?.includes('Allumer le feu') ||
+            details.description?.includes('Welcome to Hoi An') ||
+            details.description?.includes('Vietnamese Lotus Soul') ||
+            details.description?.includes('Team Power') ||
+            details.description?.includes('Green Planet') ||
+            details.mediaUrl?.includes('unsplash.com')
+          ) {
+            updatedTeamDetails[teamId] = {
+              description: '',
+              mediaUrl: '',
+              mediaType: 'image'
+            };
+            sessionUpdated = true;
+          }
+        });
+
+        if (sessionUpdated) {
+          batch.update(sDoc.ref, { teamDetails: updatedTeamDetails });
+          updatedAny = true;
+        }
+      }
+    });
+
+    if (updatedAny) {
+      await batch.commit();
+      console.log('Successfully migrated sessions to clear mock details.');
+    }
+  } catch (e) {
+    console.error('Sessions migration failed:', e);
+  }
+}
+
 // Seeding logic for Firestore
 async function checkAndSeedFirestore() {
   try {
@@ -258,6 +340,10 @@ async function checkAndSeedFirestore() {
         maxVotes: 1
       };
       await setDoc(doc(db, 'sessions', 'session-1'), initialSession);
+    } else {
+      // Run migrations for existing data to clear mock details
+      await migrateExistingFirestoreData();
+      await migrateExistingSessions();
     }
   } catch (e) {
     console.error('Firestore seeding failed, falling back to local mode:', e);
@@ -669,21 +755,45 @@ export async function resetDatabase() {
     return;
   }
 
-  try {
-    const globalRef = doc(db, 'config', 'global');
-    await deleteDoc(globalRef);
+  // 1. Reset config/global (using setDoc instead of deleteDoc)
+  const globalRef = doc(db, 'config', 'global');
+  const defaultTeams: Team[] = Object.entries(DEFAULT_TEAMS_DATA).map(([teamId, members]) => {
+    return {
+      id: teamId,
+      name: TEAM_NAMES[teamId] || `Team ${teamId.split('-')[1]}`,
+      members: members.map((name, index) => ({
+        id: `${teamId}-user-${index + 1}-${Math.random().toString(36).substring(2, 7)}`,
+        name
+      })),
+      description: '',
+      mediaUrl: '',
+      mediaType: 'image'
+    };
+  });
+  await setDoc(globalRef, {
+    teams: defaultTeams,
+    currentSessionId: 'session-1'
+  });
 
-    const sessionsSnap = await getDocs(collection(db, 'sessions'));
-    const batch = writeBatch(db);
-    sessionsSnap.forEach(sDoc => {
-      batch.delete(sDoc.ref);
-    });
-    await batch.commit();
+  // 2. Delete all existing sessions in a write batch
+  const sessionsSnap = await getDocs(collection(db, 'sessions'));
+  const batch = writeBatch(db);
+  sessionsSnap.forEach(sDoc => {
+    batch.delete(sDoc.ref);
+  });
+  await batch.commit();
 
-    await checkAndSeedFirestore();
-  } catch (e) {
-    console.error('Failed to reset Firestore DB:', e);
-  }
+  // 3. Create initial clean session-1
+  const initialSession: Omit<VotingSession, 'votes'> = {
+    id: 'session-1',
+    title: 'Best Performance Voting',
+    status: 'waiting',
+    countdownStartedAt: null,
+    votingStartedAt: null,
+    duration: 300,
+    maxVotes: 1
+  };
+  await setDoc(doc(db, 'sessions', 'session-1'), initialSession);
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────

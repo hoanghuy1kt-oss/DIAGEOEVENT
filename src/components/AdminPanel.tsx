@@ -23,7 +23,9 @@ import {
 } from '../lib/database';
 
 export default function AdminPanel() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem('spg_admin_authenticated') === 'true';
+  });
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -128,6 +130,7 @@ export default function AdminPanel() {
     e.preventDefault();
     if (password === 'diageo@123') {
       setIsAuthenticated(true);
+      sessionStorage.setItem('spg_admin_authenticated', 'true');
       setPasswordError('');
     } else {
       setPasswordError('Incorrect admin password.');
@@ -367,7 +370,10 @@ export default function AdminPanel() {
             RESET DATABASE TO DEFAULT
           </button>
           <button
-            onClick={() => setIsAuthenticated(false)}
+            onClick={() => {
+              setIsAuthenticated(false);
+              sessionStorage.removeItem('spg_admin_authenticated');
+            }}
             className="px-4 py-2 border border-[#241C15]/20 hover:bg-[#241C15]/5 font-bold text-xs rounded-xl tracking-wide transition-all"
           >
             LOCK SCREEN
